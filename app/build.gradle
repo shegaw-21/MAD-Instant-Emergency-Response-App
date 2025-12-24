@@ -1,0 +1,77 @@
+// The "plugins" block is where you declare the Gradle plugins needed for your project.
+// Gradle plugins extend Gradle's capabilities, adding new tasks, configurations, and so on.
+plugins {
+    // This plugin is essential for an Android application. It provides the tasks necessary
+    // to build and package an Android app (e.g., compiling code, packaging resources, creating an APK/AAB).
+    id 'com.android.application'
+}
+
+// The "android" block contains all the core configuration for your Android app.
+android {
+
+    // VERY IMPORTANT: This 'namespace' must exactly match the package name declared
+    // at the top of your Java files (e.g., MainActivity.java). It's used to generate
+    // the R class and resolve Android manifest classes.
+    namespace 'com.example.guardiansos'
+    compileSdk 34 // The API level your app is compiled against. Your app can use Android APIs up to this level.
+
+    defaultConfig {
+        // *** THIS IS THE CORRECTED LINE ***
+        // The applicationId is the unique ID for your app on the Google Play Store and on the device.
+        // It must be unique across all apps. It's best practice to keep this the same as your namespace.
+        applicationId "com.example.guardiansos"
+
+        minSdk 24              // The minimum Android version your app supports (Android 7.0 Nougat).
+                               // Devices with an API level lower than this cannot install your app.
+        targetSdk 34           // The version your app is specifically tested against.
+                               // It's a signal to the Android system that you've tested your app on this version.
+        versionCode 1          // An internal version number. You must increment this for every release to the Play Store.
+        versionName "1.0"      // The version name shown to users in the Play Store and in the app settings.
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" // The framework for running automated tests.
+    }
+
+    // The "buildTypes" block defines how to build and package your app for different situations,
+    // like a "debug" version for development and a "release" version for the public.
+    buildTypes {
+        // The "release" build type is for the version of your app that you distribute to users.
+        release {
+            // "minifyEnabled true" would shrink, obfuscate, and optimize your code, making it smaller and harder to reverse-engineer.
+            // It's set to "false" here for simplicity, but it's highly recommended for production apps.
+            minifyEnabled false
+            // ProGuard rules define which code should not be removed or obfuscated during the optimization process.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        // A "debug" build type is automatically created, which is used for development and testing.
+    }
+
+    // This block ensures your project can use modern Java 8 language features.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// The "dependencies" block lists all the external libraries (dependencies) your app needs to function.
+// These dependencies are downloaded from repositories like Maven Central and Google's Maven repository.
+dependencies {
+
+    // Standard Android Support and UI Libraries
+    implementation 'androidx.appcompat:appcompat:1.6.1' // Provides backward compatibility for older Android versions.
+    implementation 'com.google.android.material:material:1.10.0' // Provides Material Design components.
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4' // For building flexible and efficient layouts.
+
+    // --- Dependencies specific to the GuardianSOS App ---
+
+    // Google's Gson library: For easily converting Java Objects (like your contact list)
+    // into a string (JSON format) to save them in SharedPreferences.
+    implementation 'com.google.code.gson:gson:2.9.0'
+
+    // Google Play Services Location library: To get the device's current GPS location.
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+
+    // Standard libraries for testing your code
+    testImplementation 'junit:junit:4.13.2' // For running unit tests.
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5' // For running instrumented tests on an Android device.
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1' // For UI testing.
+}

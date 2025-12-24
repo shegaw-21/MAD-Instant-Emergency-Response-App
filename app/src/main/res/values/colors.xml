@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand colors -->
+    <color name="colorPrimary">#1B5E20</color> <!-- Dark Green -->
+    <color name="colorPrimaryDark">#003300</color> <!-- A darker green for the status bar -->
+    <color name="colorAccent">#C62828</color> <!-- Red for accents like the SOS button -->
+
+    <!-- UI Element Colors -->
+    <color name="window_background">#303030</color> <!-- A dark charcoal for backgrounds -->
+    <color name="card_background">#424242</color> <!-- A lighter gray for cards -->
+    <color name="text_primary">#FFFFFF</color> <!-- White for primary text -->
+    <color name="text_secondary">#BDBDBD</color> <!-- A light gray for secondary text -->
+    <color name="icon_tint">#FFFFFF</color>
+
+</resources>
