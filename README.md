@@ -126,7 +126,7 @@ SEND MESSAGE – Send emergency SMS without calling
 
 Platform: Android
 
-Language: Java / Kotlin
+Language: Java 
 
 APIs:
 
@@ -134,15 +134,3 @@ Google Location Services
 
 Android Telephony & Media APIs
 
-⚠️ Disclaimer
-
-GuardianSOS is a supportive safety tool and should not replace official emergency services. Always contact local emergency authorities when possible.
-
-🤝 Contributing
-
-Contributions, suggestions, and improvements are welcome!
-Feel free to fork this repository and submit a pull request.
-
-📄 License
-
-This project is licensed under the MIT License.
