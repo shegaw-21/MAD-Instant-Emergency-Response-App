@@ -1,0 +1,13 @@
+GuardianSOS - Personal Emergency Alert App
+GuardianSOS is an Android application designed to be your personal safety companion. In an emergency, a single tap can alert your trusted contacts, activate a siren, and record crucial evidence, providing peace of mind for you and your loved ones.
+Key Features
+One-Tap SOS: Immediately initiates a sequence of emergency actions with a single press of the prominent SOS button.•Primary Call: Automatically places a phone call to your designated primary emergency contact.•Multi-Contact SMS Alerts: Sends a customizable emergency message, including your current GPS location, to multiple trusted contacts simultaneously.
+•Loud Siren: Activates a high-volume siren to attract attention and deter threats.•Evidence Recording:◦Record Video: Quickly launch the device's camera to record video evidence.◦Record Audio: A discreet in-app audio recorder allows you to capture audio evidence with a timer.Flexible Sharing: Instantly share your recorded audio or video evidence through any compatible app on your device (e.g., WhatsApp, Telegram, Google Drive).•Customizable Trusted Contacts:◦Easily manage your list of trusted contacts.◦Designate one contact for the primary emergency call.Select multiple contacts to receive SMS alerts.◦Sync with your phone's address book or add contacts manually.•Home Screen Widget: Trigger an SOS alert directly from your home screen without opening the app.
+Permissions Used
+GuardianSOS requires the following permissions to provide its life-saving features:
+ACCESS_FINE_LOCATION: To include your location in emergency messages.•CALL_PHONE: To automatically call your primary emergency contact.•SEND_SMS: To send emergency alerts to your trusted contacts.•READ_CONTACTS: To allow you to easily sync and manage your trusted contacts from your phone's address book.RECORD_AUDIO: To enable the in-app audio recording feature.•CAMERA: To launch the camera for video recording.•FOREGROUND_SERVICE: To ensure the siren can continue running in the background.
+How to Use
+Set Up Trusted Contacts: Open the app and navigate to the "Trusted Contacts" screen. Add contacts manually, from your address book, or by syncing. Designate one contact for the primary call (using the switch) and select others for SMS alerts (using the checkbox).
+Customize Your Message: Go to "Settings" to customize the default emergency message that will be sent.
+Activate SOS: In an emergency, press the main SOS button to initiate the primary call and send SMS alerts to all selected contacts.
+4.Use Quick Actions:◦Tap SIREN to activate a loud alarm.◦Tap RECORD VIDEO or RECORD VOICE to capture evidence.◦Tap SEND MESSAGE to prepare an emergency SMS without making a call.
