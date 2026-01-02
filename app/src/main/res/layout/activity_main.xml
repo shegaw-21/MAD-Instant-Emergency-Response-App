@@ -7,6 +7,7 @@
     android:background="#EFEFEF"
     tools:context=".MainActivity">
 
+    <!-- Toolbar -->
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
@@ -15,6 +16,7 @@
         app:title="Emergency App"
         app:titleTextColor="@android:color/white" />
 
+    <!-- SOS Button -->
     <TextView
         android:id="@+id/sos_button"
         android:layout_width="150dp"
@@ -33,42 +35,33 @@
         android:textSize="24sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/trusted_contacts_link"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/sos_button"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:clickable="true"
-        android:focusable="true"
-        android:text="Trusted Contacts"
-        android:textColor="#0277BD"
-        android:textSize="16sp"
-        android:textStyle="bold" />
-
+    <!-- Emergency Options Box -->
     <LinearLayout
         android:id="@+id/options_box"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
+        android:layout_below="@id/sos_button"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="32dp"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
         android:background="#1B5E20"
         android:orientation="vertical"
         android:padding="24dp">
 
+        <!-- Record Video Button -->
         <TextView
             android:id="@+id/record_video_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:clickable="true"
             android:focusable="true"
-            android:padding="8dp"
+            android:padding="12dp"
             android:text="RECORD VIDEO"
             android:textColor="@android:color/white"
             android:textSize="16sp" />
 
+        <!-- Record Audio Button -->
         <TextView
             android:id="@+id/record_audio_button"
             android:layout_width="match_parent"
@@ -76,11 +69,12 @@
             android:layout_marginTop="8dp"
             android:clickable="true"
             android:focusable="true"
-            android:padding="8dp"
+            android:padding="12dp"
             android:text="RECORD VOICE"
             android:textColor="@android:color/white"
             android:textSize="16sp" />
 
+        <!-- Send Message Button -->
         <TextView
             android:id="@+id/send_message_button"
             android:layout_width="match_parent"
@@ -88,28 +82,58 @@
             android:layout_marginTop="8dp"
             android:clickable="true"
             android:focusable="true"
-            android:padding="8dp"
+            android:padding="12dp"
             android:text="SEND MESSAGE"
             android:textColor="@android:color/white"
             android:textSize="16sp" />
+
+        <!-- I'm Safe Button -->
+        <TextView
+            android:id="@+id/im_safe_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="12dp"
+            android:text="I'M SAFE NOW"
+            android:textColor="@android:color/white"
+            android:textSize="16sp" />
+
+        <!-- Trusted Contacts Button (Added to options box with odd color) -->
+        <TextView
+            android:id="@+id/trusted_contacts_link"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#6D4C41"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="12dp"
+            android:text="TRUSTED CONTACTS"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
     </LinearLayout>
 
+    <!-- Siren Button (Minimized and centered at bottom) -->
     <TextView
         android:id="@+id/siren_button"
-        android:layout_width="150dp"
-        android:layout_height="150dp"
-        android:layout_alignParentBottom="true"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
         android:layout_centerHorizontal="true"
-        android:layout_marginBottom="48dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="32dp"
         android:background="@drawable/circle_background_red"
         android:clickable="true"
         android:drawableTop="@android:drawable/ic_lock_silent_mode_off"
         android:focusable="true"
         android:gravity="center"
-        android:paddingTop="30dp"
+        android:paddingTop="20dp"
         android:text="SIREN"
         android:textColor="@android:color/white"
-        android:textSize="24sp"
+        android:textSize="18sp"
         android:textStyle="bold" />
 
 </RelativeLayout>

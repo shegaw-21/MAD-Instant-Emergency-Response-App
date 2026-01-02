@@ -4,16 +4,16 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_background"
+    android:background="#424242"
     tools:context=".TrustedContactsActivity">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar_contacts"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/colorPrimary"
+        android:background="?attr/colorPrimary"
         app:title="Trusted Contacts"
-        app:titleTextColor="@color/text_primary" />
+        app:titleTextColor="@android:color/white" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/contacts_recycler_view"
@@ -37,7 +37,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="@color/card_background"
+        android:background="@color/colorPrimary"
         android:orientation="horizontal">
 
         <Button
@@ -56,6 +56,15 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="SYNC CONTACTS"
+            android:textColor="@color/text_primary" />
+        
+        <Button
+            android:id="@+id/button_message_selected"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="MESSAGE"
             android:textColor="@color/text_primary" />
 
         <Button

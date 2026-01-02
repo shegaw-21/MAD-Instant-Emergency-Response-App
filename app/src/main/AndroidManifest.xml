@@ -14,7 +14,7 @@
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
         android:allowBackup="true"
@@ -40,6 +40,12 @@
             android:name=".SirenService"
             android:enabled="true"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- THIS IS THE FIX: Added the required foregroundServiceType -->
+        <service
+            android:name=".SmsSenderService"
+            android:enabled="true"
+            android:foregroundServiceType="shortService" />
 
         <receiver
             android:name=".SOSWidgetProvider"

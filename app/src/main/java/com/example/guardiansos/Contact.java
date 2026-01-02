@@ -3,17 +3,17 @@ package com.example.guardiansos;
 public class Contact {
     private String name;
     private String phoneNumber;
-    private boolean isSelectedForSms; // For the checkbox (SMS)
-    private boolean isPrimaryForCall; // For the switch (Call)
+    private boolean isSelectedForSms;
+    private boolean isIncludedInCallQueue;
 
     public Contact(String name, String phoneNumber) {
         this.name = name;
         this.phoneNumber = phoneNumber;
         this.isSelectedForSms = false;
-        this.isPrimaryForCall = false;
+        this.isIncludedInCallQueue = false;
     }
 
-    // Getters and Setters
+    // --- Getters and Setters ---
 
     public String getName() {
         return name;
@@ -39,11 +39,11 @@ public class Contact {
         isSelectedForSms = selectedForSms;
     }
 
-    public boolean isPrimaryForCall() {
-        return isPrimaryForCall;
+    public boolean isIncludedInCallQueue() {
+        return isIncludedInCallQueue;
     }
 
-    public void setPrimaryForCall(boolean primaryForCall) {
-        isPrimaryForCall = primaryForCall;
+    public void setIncludedInCallQueue(boolean includedInCallQueue) {
+        isIncludedInCallQueue = includedInCallQueue;
     }
 }

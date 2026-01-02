@@ -3,11 +3,8 @@ package com.example.guardiansos;
 import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
-import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.media.MediaRecorder;
@@ -18,7 +15,8 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
-import android.telephony.SmsManager;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -46,20 +44,18 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int PERMISSIONS_REQUEST_CODE = 100;
     private static final String LOG_TAG = "GuardianSOS_Main";
-    private static final String SENT_SMS_ACTION = "com.example.guardiansos.SMS_SENT";
-    private static final String DELIVERED_SMS_ACTION = "com.example.guardiansos.SMS_DELIVERED";
 
-    private FusedLocationProviderClient fusedLocationClient;
+    private FusedLocationProviderClient fusedLocationProviderClient;
     private SharedPreferencesManager prefsManager;
     private ActivityResultLauncher<Intent> videoCaptureLauncher;
 
+    // Media & UI
     private MediaRecorder mediaRecorder;
     private String currentAudioPath = "";
     private boolean isRecording = false;
@@ -67,8 +63,13 @@ public class MainActivity extends AppCompatActivity {
     private Handler timerHandler;
     private long startTime = 0L;
 
-    private BroadcastReceiver sentSmsReceiver;
-    private BroadcastReceiver deliveredSmsReceiver;
+    // Sequential Calling
+    private TelephonyManager telephonyManager;
+    private PhoneStateListener phoneStateListener;
+    private List<String> callQueue;
+    private int currentCallIndex;
+    private boolean isMakingSosCall = false;
+    private long callStartTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,7 +77,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         prefsManager = new SharedPreferencesManager(this);
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+        callQueue = new ArrayList<>();
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -84,150 +87,191 @@ public class MainActivity extends AppCompatActivity {
         registerActivityLaunchers();
         setupClickListeners();
         checkAndRequestPermissions();
-        registerSmsReceivers();
+        setupPhoneStateListener();
 
         if (getIntent().getBooleanExtra("SOS_TRIGGER", false)) {
-            activateSOS();
+            activateSOS("General Emergency (from Widget)");
         }
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // Unregister receivers to prevent memory leaks
-        if (sentSmsReceiver != null) {
-            unregisterReceiver(sentSmsReceiver);
+    private void activateSOS(String emergencyType) {
+        Log.d(LOG_TAG, "SOS Protocol Activated! Type: " + emergencyType);
+        if (!checkAndRequestPermissions()) {
+            Toast.makeText(this, "Please grant all required permissions to use SOS.", Toast.LENGTH_LONG).show();
+            return;
         }
-        if (deliveredSmsReceiver != null) {
-            unregisterReceiver(deliveredSmsReceiver);
-        }
-    }
 
-    private void registerSmsReceivers() {
-        sentSmsReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String contactName = intent.getStringExtra("contactName");
-                switch (getResultCode()) {
-                    case Activity.RESULT_OK:
-                        Toast.makeText(context, "SMS Sent to " + contactName, Toast.LENGTH_SHORT).show();
-                        break;
-                    default:
-                        Toast.makeText(context, "Failed to send SMS to " + contactName, Toast.LENGTH_SHORT).show();
-                        break;
-                }
-            }
-        };
-
-        deliveredSmsReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String contactName = intent.getStringExtra("contactName");
-                Toast.makeText(context, "SMS Delivered to " + contactName, Toast.LENGTH_SHORT).show();
-            }
-        };
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(sentSmsReceiver, new IntentFilter(SENT_SMS_ACTION), Context.RECEIVER_NOT_EXPORTED);
-            registerReceiver(deliveredSmsReceiver, new IntentFilter(DELIVERED_SMS_ACTION), Context.RECEIVER_NOT_EXPORTED);
+        buildCallQueue();
+        if (callQueue.isEmpty()) {
+            Toast.makeText(this, "No trusted contacts set for calling.", Toast.LENGTH_LONG).show();
         } else {
-            registerReceiver(sentSmsReceiver, new IntentFilter(SENT_SMS_ACTION));
-            registerReceiver(deliveredSmsReceiver, new IntentFilter(DELIVERED_SMS_ACTION));
+            isMakingSosCall = true;
+            currentCallIndex = 0;
+            makeNextCall();
         }
+
+        sendSMSToTrustedContacts(emergencyType);
     }
 
-    private void sendMessageToAll(String locationLink) {
-        Map<String, String> contacts = prefsManager.getTrustedContacts();
+    private void sendSMSToTrustedContacts(String emergencyType) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            startSmsService(emergencyType, null);
+            return;
+        }
 
-        if (contacts.isEmpty()) {
-            new AlertDialog.Builder(this)
-                    .setTitle("No Trusted Contacts")
-                    .setMessage("You have not selected any trusted contacts to receive an SMS. Please add contacts first.")
-                    .setPositiveButton("Add Contacts", (dialog, which) -> {
-                        startActivity(new Intent(this, TrustedContactsActivity.class));
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show();
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(this, location -> {
+            String locationLink = location != null ? "http://maps.google.com/maps?q=" + location.getLatitude() + "," + location.getLongitude() : null;
+            startSmsService(emergencyType, locationLink);
+        });
+    }
+
+    private void startSmsService(String emergencyType, String locationLink) {
+        List<Contact> contacts = prefsManager.getContacts();
+        ArrayList<String> recipients = new ArrayList<>();
+        for (Contact contact : contacts) {
+            if (contact.isSelectedForSms()) {
+                recipients.add(contact.getPhoneNumber());
+            }
+        }
+
+        if (recipients.isEmpty()) {
+            if (!isMakingSosCall) {
+                Toast.makeText(this, "No contacts selected for SMS.", Toast.LENGTH_SHORT).show();
+            }
             return;
         }
 
         String customMessage = prefsManager.getCustomSmsMessage();
         String finalMessage = customMessage;
+        if (emergencyType != null && !emergencyType.isEmpty()) {
+            finalMessage += "\n\nEmergency Type: " + emergencyType;
+        }
         if (locationLink != null && !locationLink.isEmpty()) {
             finalMessage += "\nMy current location is: " + locationLink;
         }
 
-        try {
-            SmsManager smsManager = SmsManager.getDefault();
-            ArrayList<String> messageParts = smsManager.divideMessage(finalMessage);
-            int requestCode = 0;
-
-            for (Map.Entry<String, String> contact : contacts.entrySet()) {
-                String phone = contact.getKey();
-                String name = contact.getValue();
-
-                ArrayList<PendingIntent> sentIntents = new ArrayList<>();
-                Intent sentIntent = new Intent(SENT_SMS_ACTION);
-                sentIntent.putExtra("contactName", name);
-                PendingIntent sentPI = PendingIntent.getBroadcast(this, requestCode++, sentIntent, PendingIntent.FLAG_IMMUTABLE);
-                sentIntents.add(sentPI);
-
-                ArrayList<PendingIntent> deliveredIntents = new ArrayList<>();
-                Intent deliveredIntent = new Intent(DELIVERED_SMS_ACTION);
-                deliveredIntent.putExtra("contactName", name);
-                PendingIntent deliveredPI = PendingIntent.getBroadcast(this, requestCode++, deliveredIntent, PendingIntent.FLAG_IMMUTABLE);
-                deliveredIntents.add(deliveredPI);
-
-                smsManager.sendMultipartTextMessage(phone, null, messageParts, sentIntents, deliveredIntents);
-            }
-
-        } catch (Exception e) {
-            Toast.makeText(this, "SMS failed to send. Please check permissions.", Toast.LENGTH_LONG).show();
-            Log.e(LOG_TAG, "SMS sending failed", e);
-        }
+        Intent serviceIntent = new Intent(this, SmsSenderService.class);
+        serviceIntent.putExtra("recipients", recipients);
+        serviceIntent.putExtra("message", finalMessage);
+        
+        ContextCompat.startForegroundService(this, serviceIntent);
     }
 
-    private void activateSOS() {
-        Log.d(LOG_TAG, "SOS Protocol Activated!");
+    private void sendImSafeMessage() {
+        List<Contact> contacts = prefsManager.getContacts();
+        ArrayList<String> recipients = new ArrayList<>();
+        for (Contact contact : contacts) {
+            if (contact.isSelectedForSms()) {
+                recipients.add(contact.getPhoneNumber());
+            }
+        }
 
-        if (!checkAndRequestPermissions()) {
-            Toast.makeText(this, "Please grant permissions to use SOS.", Toast.LENGTH_LONG).show();
+        if (recipients.isEmpty()) {
+            Toast.makeText(this, "No SMS contacts to notify.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        String primaryContactPhone = prefsManager.getPrimaryContactPhone();
-        if (primaryContactPhone != null && !primaryContactPhone.isEmpty()) {
-            Intent callIntent = new Intent(Intent.ACTION_CALL);
-            callIntent.setData(Uri.parse("tel:" + primaryContactPhone));
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                startActivity(callIntent);
-            }
-        } else {
-            Toast.makeText(this, "No primary emergency contact is set for the call.", Toast.LENGTH_LONG).show();
-        }
-
-        sendSMSToTrustedContacts();
+        String safeMessage = "The emergency is over. I am safe now.";
+        Intent serviceIntent = new Intent(this, SmsSenderService.class);
+        serviceIntent.putExtra("recipients", recipients);
+        serviceIntent.putExtra("message", safeMessage);
+        
+        ContextCompat.startForegroundService(this, serviceIntent);
+        Toast.makeText(this, "Sending 'I am safe' message...", Toast.LENGTH_SHORT).show();
     }
 
-    private void sendSMSToTrustedContacts() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Location permission not granted. Cannot send location.", Toast.LENGTH_SHORT).show();
-            sendMessageToAll(null);
+    @SuppressWarnings("deprecation")
+    private void setupPhoneStateListener() {
+        phoneStateListener = new PhoneStateListener() {
+            @Override
+            public void onCallStateChanged(int state, String incomingNumber) {
+                super.onCallStateChanged(state, incomingNumber);
+                if (!isMakingSosCall) return;
+
+                // --- THIS IS THE FIX: Only check for IDLE state ---
+                if (state == TelephonyManager.CALL_STATE_IDLE) {
+                    telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+                    long callDuration = System.currentTimeMillis() - callStartTime;
+
+                    if (callDuration < 15000) { // Heuristic for unanswered calls
+                        currentCallIndex++;
+                        if (currentCallIndex < callQueue.size()) {
+                            showCallNextContactDialog();
+                        } else {
+                            Toast.makeText(MainActivity.this, "End of emergency call list.", Toast.LENGTH_LONG).show();
+                            isMakingSosCall = false;
+                        }
+                    } else {
+                        Toast.makeText(MainActivity.this, "Emergency call completed.", Toast.LENGTH_LONG).show();
+                        isMakingSosCall = false;
+                    }
+                }
+            }
+        };
+    }
+
+    private void showCallNextContactDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Call Unsuccessful")
+                .setMessage("The previous contact did not answer. Call the next person?")
+                .setPositiveButton("Yes, Call Next", (dialog, which) -> makeNextCall())
+                .setNegativeButton("No, Stop", (dialog, which) -> {
+                    isMakingSosCall = false;
+                    Toast.makeText(MainActivity.this, "Emergency call sequence stopped.", Toast.LENGTH_SHORT).show();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    private void makeNextCall() {
+        if (callQueue.isEmpty() || currentCallIndex >= callQueue.size()) {
+            Toast.makeText(this, "No more contacts to call.", Toast.LENGTH_SHORT).show();
+            isMakingSosCall = false;
+            return;
+        }
+        String phoneNumber = callQueue.get(currentCallIndex);
+        Intent callIntent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + phoneNumber));
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            isMakingSosCall = false;
             return;
         }
 
-        fusedLocationClient.getLastLocation().addOnSuccessListener(this, location -> {
-            String locationLink = null;
-            if (location != null) {
-                locationLink = "http://maps.google.com/maps?q=" + location.getLatitude() + "," + location.getLongitude();
-            } else {
-                Toast.makeText(MainActivity.this, "Could not get location. Sending SMS without it.", Toast.LENGTH_LONG).show();
-            }
-            sendMessageToAll(locationLink);
-        });
+        // --- THIS IS THE FIX: Start the timer before making the call ---
+        callStartTime = System.currentTimeMillis();
+        telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        startActivity(callIntent);
+        Toast.makeText(this, "Calling " + phoneNumber, Toast.LENGTH_LONG).show();
     }
 
-    // ... (The rest of your MainActivity methods remain largely the same) ...
+    private void buildCallQueue() {
+        callQueue.clear();
+        List<Contact> contacts = prefsManager.getContacts();
+        for (Contact contact : contacts) {
+            if (contact.isIncludedInCallQueue()) {
+                callQueue.add(contact.getPhoneNumber());
+            }
+        }
+    }
+
+    private void setupClickListeners() {
+        findViewById(R.id.sos_button).setOnClickListener(v -> activateSOS("General Emergency"));
+        findViewById(R.id.siren_button).setOnClickListener(v -> toggleSiren());
+        findViewById(R.id.trusted_contacts_link).setOnClickListener(v -> startActivity(new Intent(MainActivity.this, TrustedContactsActivity.class)));
+        findViewById(R.id.record_video_button).setOnClickListener(v -> recordVideo());
+        findViewById(R.id.record_audio_button).setOnClickListener(v -> showRecordAudioDialog());
+        findViewById(R.id.send_message_button).setOnClickListener(v -> showEmergencyTypeDialog());
+        findViewById(R.id.im_safe_button).setOnClickListener(v -> sendImSafeMessage());
+    }
+
+    private void showEmergencyTypeDialog() {
+        final CharSequence[] items = {"Traffic", "Health", "Conflict", "Other"};
+        new AlertDialog.Builder(this)
+                .setTitle("Select Emergency Type")
+                .setItems(items, (dialog, item) -> sendSMSToTrustedContacts(items[item].toString()))
+                .show();
+    }
+    
     private void registerActivityLaunchers() {
         videoCaptureLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -241,26 +285,13 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    private void setupClickListeners() {
-        findViewById(R.id.sos_button).setOnClickListener(v -> activateSOS());
-        findViewById(R.id.siren_button).setOnClickListener(v -> toggleSiren());
-        findViewById(R.id.trusted_contacts_link).setOnClickListener(v ->
-                startActivity(new Intent(MainActivity.this, TrustedContactsActivity.class))
-        );
-        findViewById(R.id.record_video_button).setOnClickListener(v -> recordVideo());
-        findViewById(R.id.record_audio_button).setOnClickListener(v -> showRecordAudioDialog());
-        findViewById(R.id.send_message_button).setOnClickListener(v -> sendSMSToTrustedContacts());
-    }
-
     private void showRecordAudioDialog() {
         recordDialog = new Dialog(this);
         recordDialog.setContentView(R.layout.dialog_record_audio);
         recordDialog.setCancelable(false);
-
         TextView timerTextView = recordDialog.findViewById(R.id.text_view_timer);
         TextView statusTextView = recordDialog.findViewById(R.id.text_view_recording_status);
         ImageButton recordButton = recordDialog.findViewById(R.id.button_record_dialog);
-
         recordButton.setOnClickListener(v -> {
             if (isRecording) {
                 stopRecording();
@@ -307,7 +338,6 @@ public class MainActivity extends AppCompatActivity {
             });
         } catch (IOException e) {
             Log.e(LOG_TAG, "startRecording failed", e);
-            Toast.makeText(this, "Recording failed to start.", Toast.LENGTH_SHORT).show();
             isRecording = false;
         }
     }
@@ -318,17 +348,13 @@ public class MainActivity extends AppCompatActivity {
                 mediaRecorder.stop();
                 mediaRecorder.release();
             } catch (RuntimeException e) {
-                Log.w(LOG_TAG, "MediaRecorder stop failed: " + e.getMessage());
+                // ignore
             }
             mediaRecorder = null;
         }
         isRecording = false;
-        if (timerHandler != null) {
-            timerHandler.removeCallbacksAndMessages(null);
-        }
-        if (recordDialog != null) {
-            recordDialog.dismiss();
-        }
+        if (timerHandler != null) timerHandler.removeCallbacksAndMessages(null);
+        if (recordDialog != null) recordDialog.dismiss();
         if (!currentAudioPath.isEmpty()) {
             File audioFile = new File(currentAudioPath);
             Uri audioUri = FileProvider.getUriForFile(this, getApplicationContext().getPackageName() + ".provider", audioFile);
@@ -339,9 +365,7 @@ public class MainActivity extends AppCompatActivity {
 
     private File createAudioFile() throws IOException {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-        String audioFileName = "AUDIO_" + timeStamp + "_";
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
-        return File.createTempFile(audioFileName, ".mp4", storageDir);
+        return File.createTempFile("AUDIO_" + timeStamp + "_", ".mp4", getExternalFilesDir(Environment.DIRECTORY_MUSIC));
     }
 
     private void shareMedia(Uri mediaUri, String mimeType) {
@@ -352,16 +376,13 @@ public class MainActivity extends AppCompatActivity {
         } else if (mimeType.startsWith("video")) {
             finalMessage += "\n\nAttached is an emergency video recording.";
         }
-
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType(mimeType);
         shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
         shareIntent.putExtra(Intent.EXTRA_TEXT, finalMessage);
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Emergency Alert from GuardianSOS");
         shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        Intent chooserIntent = Intent.createChooser(shareIntent, "Share Emergency Recording via...");
-        startActivity(chooserIntent);
+        startActivity(Intent.createChooser(shareIntent, "Share Emergency Recording via..."));
     }
 
     private void recordVideo() {
@@ -374,14 +395,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean checkAndRequestPermissions() {
-        String[] permissions = {
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.CALL_PHONE,
-                Manifest.permission.SEND_SMS,
-                Manifest.permission.READ_CONTACTS,
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CAMERA
-        };
+        String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS, Manifest.permission.READ_CONTACTS, Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA, Manifest.permission.READ_PHONE_STATE};
         List<String> listPermissionsNeeded = new ArrayList<>();
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -399,7 +413,6 @@ public class MainActivity extends AppCompatActivity {
         Intent sirenIntent = new Intent(this, SirenService.class);
         if (SirenService.IS_SIREN_RUNNING) {
             stopService(sirenIntent);
-            Toast.makeText(this, "Siren Deactivated", Toast.LENGTH_SHORT).show();
         } else {
             Uri sirenUri = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.siren_sound);
             sirenIntent.setData(sirenUri);
@@ -408,7 +421,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 startService(sirenIntent);
             }
-            Toast.makeText(this, "Siren Activated", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -438,9 +450,7 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 }
             }
-            if (allGranted) {
-                Log.d(LOG_TAG, "All requested permissions granted.");
-            } else {
+            if (!allGranted) {
                 Toast.makeText(this, "Some permissions were denied. App functionality may be limited.", Toast.LENGTH_LONG).show();
             }
         }

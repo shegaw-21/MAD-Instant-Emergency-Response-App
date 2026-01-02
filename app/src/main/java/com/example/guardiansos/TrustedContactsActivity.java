@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.telephony.PhoneNumberUtils;
 import android.text.InputType;
-import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -25,18 +24,17 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
-public class TrustedContactsActivity extends AppCompatActivity implements ContactAdapter.OnItemClickListener, ContactAdapter.OnPrimaryContactChangeListener {
+public class TrustedContactsActivity extends AppCompatActivity implements ContactAdapter.OnItemClickListener {
 
     private static final int PERMISSIONS_REQUEST_READ_CONTACTS = 100;
-    private static final String LOG_TAG = "TrustedContacts";
 
     private List<Contact> contactList = new ArrayList<>();
     private ContactAdapter contactAdapter;
@@ -56,7 +54,20 @@ public class TrustedContactsActivity extends AppCompatActivity implements Contac
         contactAdapter = new ContactAdapter(contactList);
         recyclerView.setAdapter(contactAdapter);
         contactAdapter.setOnItemClickListener(this);
-        contactAdapter.setOnPrimaryContactChangeListener(this);
+
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+                int fromPosition = viewHolder.getAdapterPosition();
+                int toPosition = target.getAdapterPosition();
+                Collections.swap(contactList, fromPosition, toPosition);
+                contactAdapter.notifyItemMoved(fromPosition, toPosition);
+                return true;
+            }
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {}
+        });
+        itemTouchHelper.attachToRecyclerView(recyclerView);
 
         registerContactPickerLauncher();
 
@@ -65,7 +76,6 @@ public class TrustedContactsActivity extends AppCompatActivity implements Contac
         findViewById(R.id.button_sync_contacts).setOnClickListener(v -> checkPermissionAndSyncContacts());
         findViewById(R.id.button_save).setOnClickListener(v -> saveAndExit());
 
-        // On start, only load the contacts that were previously saved.
         loadSavedContacts();
     }
 
@@ -122,9 +132,15 @@ public class TrustedContactsActivity extends AppCompatActivity implements Contac
         ContentResolver contentResolver = getContentResolver();
         Cursor cursor = contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC");
         if (cursor != null) {
+            int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+            int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+            if (nameIndex == -1 || numberIndex == -1) {
+                Toast.makeText(this, "Error reading contacts.", Toast.LENGTH_SHORT).show();
+                return;
+            }
             while (cursor.moveToNext()) {
-                String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-                String phoneNumber = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                String name = cursor.getString(nameIndex);
+                String phoneNumber = cursor.getString(numberIndex);
                 addContactToList(new Contact(name, phoneNumber), false);
             }
             cursor.close();
@@ -132,89 +148,35 @@ public class TrustedContactsActivity extends AppCompatActivity implements Contac
         Toast.makeText(this, "All contacts have been synced!", Toast.LENGTH_SHORT).show();
     }
 
-    private void messageSelectedContacts() {
-        StringBuilder recipients = new StringBuilder();
-        int selectedCount = 0;
-        for (Contact contact : contactList) {
-            if (contact.isSelectedForSms()) {
-                recipients.append(contact.getPhoneNumber()).append(";");
-                selectedCount++;
-            }
-        }
-        if (selectedCount > 0) {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", recipients.toString(), null));
-            startActivity(intent);
-        } else {
-            Toast.makeText(this, "No contacts selected for messaging.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
+    // --- THIS IS THE FIX: Only save contacts that are actually selected. ---
     private void saveAndExit() {
-        Map<String, String> trustedSmsContacts = new HashMap<>();
-        String primaryCallContact = null;
+        List<Contact> trustedContactsToSave = new ArrayList<>();
         for (Contact contact : contactList) {
-            if (contact.isSelectedForSms()) {
-                trustedSmsContacts.put(contact.getPhoneNumber(), contact.getName());
-            }
-            if (contact.isPrimaryForCall()) {
-                primaryCallContact = contact.getPhoneNumber();
+            if (contact.isSelectedForSms() || contact.isIncludedInCallQueue()) {
+                trustedContactsToSave.add(contact);
             }
         }
-        prefsManager.saveTrustedContacts(trustedSmsContacts);
-        prefsManager.savePrimaryContactPhone(primaryCallContact);
-        Toast.makeText(this, "Settings Saved!", Toast.LENGTH_SHORT).show();
+        prefsManager.saveContacts(trustedContactsToSave);
+        Toast.makeText(this, "Trusted contacts saved!", Toast.LENGTH_SHORT).show();
         finish();
     }
 
     private void loadSavedContacts() {
         contactList.clear();
-        Map<String, String> smsContacts = prefsManager.getTrustedContacts();
-        String primaryCallPhone = prefsManager.getPrimaryContactPhone();
-        Map<String, Contact> uniqueContacts = new HashMap<>();
-
-        for (Map.Entry<String, String> entry : smsContacts.entrySet()) {
-            Contact c = new Contact(entry.getValue(), entry.getKey());
-            c.setSelectedForSms(true);
-            uniqueContacts.put(c.getPhoneNumber(), c);
-        }
-
-        if (primaryCallPhone != null && !uniqueContacts.containsKey(primaryCallPhone)) {
-            String name = getContactNameByNumber(primaryCallPhone);
-            Contact primary = new Contact(name, primaryCallPhone);
-            uniqueContacts.put(primary.getPhoneNumber(), primary);
-        }
-
-        if (primaryCallPhone != null && uniqueContacts.containsKey(primaryCallPhone)) {
-            uniqueContacts.get(primaryCallPhone).setPrimaryForCall(true);
-        }
-
-        contactList.addAll(uniqueContacts.values());
+        contactList.addAll(prefsManager.getContacts());
         contactAdapter.notifyDataSetChanged();
-    }
-
-    private String getContactNameByNumber(String phoneNumber) {
-        try {
-            ContentResolver cr = getContentResolver();
-            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber));
-            Cursor cursor = cr.query(uri, new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null);
-            if (cursor == null) return phoneNumber;
-            String contactName = phoneNumber;
-            if (cursor.moveToFirst()) {
-                contactName = cursor.getString(cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME));
-            }
-            if (!cursor.isClosed()) cursor.close();
-            return contactName;
-        } catch (Exception e) {
-            return phoneNumber;
-        }
     }
 
     private void addContactFromUri(Uri contactUri) {
         ContentResolver contentResolver = getContentResolver();
         Cursor cursor = contentResolver.query(contactUri, null, null, null, null);
         if (cursor != null && cursor.moveToFirst()) {
-            String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-            String phoneNumber = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+            int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+            int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+            if (nameIndex == -1 || numberIndex == -1) return;
+
+            String name = cursor.getString(nameIndex);
+            String phoneNumber = cursor.getString(numberIndex);
             cursor.close();
             addContactToList(new Contact(name, phoneNumber), true);
         }
@@ -238,14 +200,6 @@ public class TrustedContactsActivity extends AppCompatActivity implements Contac
         contactList.add(0, newContact);
         contactAdapter.notifyItemInserted(0);
         recyclerView.scrollToPosition(0);
-    }
-
-    @Override
-    public void onPrimaryContactChanged(int position) {
-        for (int i = 0; i < contactList.size(); i++) {
-            contactList.get(i).setPrimaryForCall(i == position);
-        }
-        contactAdapter.notifyDataSetChanged();
     }
 
     @Override

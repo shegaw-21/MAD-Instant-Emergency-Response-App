@@ -12,20 +12,11 @@ import java.util.List;
 
 public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ContactViewHolder> {
 
-    public interface OnPrimaryContactChangeListener {
-        void onPrimaryContactChanged(int position);
-    }
-
     private List<Contact> contactList;
-    private OnPrimaryContactChangeListener primaryContactListener;
     private OnItemClickListener itemClickListener;
 
     public ContactAdapter(List<Contact> contactList) {
         this.contactList = contactList;
-    }
-
-    public void setOnPrimaryContactChangeListener(OnPrimaryContactChangeListener listener) {
-        this.primaryContactListener = listener;
     }
 
     public void setOnItemClickListener(OnItemClickListener listener) {
@@ -44,19 +35,22 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ContactV
         Contact contact = contactList.get(position);
         holder.contactName.setText(contact.getName());
         holder.contactNumber.setText(contact.getPhoneNumber());
-        holder.contactCheckbox.setChecked(contact.isSelectedForSms());
-        holder.contactSwitch.setChecked(contact.isPrimaryForCall());
 
+        // Set listeners to null before setting checked state to prevent infinite loops
+        holder.contactCheckbox.setOnCheckedChangeListener(null);
+        holder.contactSwitch.setOnCheckedChangeListener(null);
+
+        // Set the state from the Contact object
+        holder.contactCheckbox.setChecked(contact.isSelectedForSms());
+        holder.contactSwitch.setChecked(contact.isIncludedInCallQueue());
+
+        // Now, set the listeners to update the object
         holder.contactCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             contact.setSelectedForSms(isChecked);
         });
 
         holder.contactSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                if (primaryContactListener != null) {
-                    primaryContactListener.onPrimaryContactChanged(holder.getAdapterPosition());
-                }
-            }
+            contact.setIncludedInCallQueue(isChecked);
         });
     }
 

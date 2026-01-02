@@ -5,15 +5,14 @@ import android.content.SharedPreferences;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SharedPreferencesManager {
 
     private static final String PREFS_NAME = "GuardianSOS_Prefs";
-    private static final String KEY_TRUSTED_CONTACTS = "trusted_contacts";
+    private static final String KEY_CONTACTS_LIST = "contacts_list";
     private static final String KEY_CUSTOM_SMS = "custom_sms_message";
-    private static final String KEY_PRIMARY_CONTACT = "primary_contact_phone";
 
     private final SharedPreferences sharedPreferences;
     private final Gson gson = new Gson();
@@ -22,16 +21,24 @@ public class SharedPreferencesManager {
         sharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
-    public void saveTrustedContacts(Map<String, String> contacts) {
+    /**
+     * Saves the ordered list of all contacts (including their selected states).
+     */
+    public void saveContacts(List<Contact> contacts) {
         String json = gson.toJson(contacts);
-        sharedPreferences.edit().putString(KEY_TRUSTED_CONTACTS, json).apply();
+        sharedPreferences.edit().putString(KEY_CONTACTS_LIST, json).apply();
     }
 
-    public Map<String, String> getTrustedContacts() {
-        String json = sharedPreferences.getString(KEY_TRUSTED_CONTACTS, null);
-        Type type = new TypeToken<HashMap<String, String>>() {}.getType();
-        Map<String, String> contacts = gson.fromJson(json, type);
-        return contacts != null ? contacts : new HashMap<>();
+    /**
+     * Retrieves the ordered list of contacts.
+     */
+    public List<Contact> getContacts() {
+        String json = sharedPreferences.getString(KEY_CONTACTS_LIST, null);
+        if (json == null) {
+            return new ArrayList<>(); // Return an empty list if nothing is saved
+        }
+        Type type = new TypeToken<ArrayList<Contact>>() {}.getType();
+        return gson.fromJson(json, type);
     }
 
     public void saveCustomSmsMessage(String message) {
@@ -40,13 +47,5 @@ public class SharedPreferencesManager {
 
     public String getCustomSmsMessage() {
         return sharedPreferences.getString(KEY_CUSTOM_SMS, "Emergency! I need help.");
-    }
-
-    public void savePrimaryContactPhone(String phone) {
-        sharedPreferences.edit().putString(KEY_PRIMARY_CONTACT, phone).apply();
-    }
-
-    public String getPrimaryContactPhone() {
-        return sharedPreferences.getString(KEY_PRIMARY_CONTACT, null);
     }
 }
